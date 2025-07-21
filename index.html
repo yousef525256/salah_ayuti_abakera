@@ -1,0 +1,902 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>العباقرة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        body { font-family: 'Cairo', sans-serif; }
+        
+        .gold-gradient {
+            background: linear-gradient(135deg, #FFD700, #FFA500, #FF8C00);
+        }
+        
+        .purple-gradient {
+            background: linear-gradient(135deg, #1e1b4b, #312e81, #3730a3);
+        }
+        
+        .dark-blue-gradient {
+            background: linear-gradient(135deg, #0f172a, #1e293b, #334155);
+        }
+        
+        .answer-btn {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .answer-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .correct-answer {
+            background: linear-gradient(135deg, #10b981, #34d399);
+            border-color: #059669;
+        }
+        
+        .wrong-answer {
+            background: linear-gradient(135deg, #ef4444, #f87171);
+            border-color: #dc2626;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .correct-glow {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(90deg, rgba(16, 185, 129, 0.8) 0%, rgba(16, 185, 129, 0.4) 15%, transparent 35%, transparent 65%, rgba(16, 185, 129, 0.4) 85%, rgba(16, 185, 129, 0.8) 100%),
+                linear-gradient(0deg, rgba(16, 185, 129, 0.6) 0%, rgba(16, 185, 129, 0.3) 20%, transparent 40%, transparent 60%, rgba(16, 185, 129, 0.3) 80%, rgba(16, 185, 129, 0.6) 100%);
+            pointer-events: none;
+            z-index: 10;
+            animation: sideGlowFade 2.5s ease-out forwards;
+        }
+        
+        .wrong-glow {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(90deg, rgba(239, 68, 68, 0.8) 0%, rgba(239, 68, 68, 0.4) 15%, transparent 35%, transparent 65%, rgba(239, 68, 68, 0.4) 85%, rgba(239, 68, 68, 0.8) 100%),
+                linear-gradient(0deg, rgba(239, 68, 68, 0.6) 0%, rgba(239, 68, 68, 0.3) 20%, transparent 40%, transparent 60%, rgba(239, 68, 68, 0.3) 80%, rgba(239, 68, 68, 0.6) 100%);
+            pointer-events: none;
+            z-index: 10;
+            animation: sideGlowFade 2.5s ease-out forwards;
+        }
+        
+        @keyframes sideGlowFade {
+            0% { 
+                opacity: 0; 
+                transform: scale(1);
+            }
+            30% { 
+                opacity: 1; 
+                transform: scale(1);
+            }
+            70% { 
+                opacity: 1; 
+                transform: scale(1);
+            }
+            100% { 
+                opacity: 0; 
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body class="dark-blue-gradient min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-6xl font-bold gold-gradient bg-clip-text text-transparent mb-4">
+                العباقرة
+            </h1>
+            <div class="gold-gradient rounded-full px-6 py-2 inline-block">
+                <span class="text-blue-900 font-bold text-xl">صلاح الدين العيوطي الثانوية</span>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="max-w-4xl mx-auto">
+            <!-- Timer -->
+            <div class="text-center mb-8">
+                <div class="mb-2">
+                    <span class="text-white font-bold text-2xl" id="timer">30</span>
+                    <span class="text-white text-sm mr-2">ثانية</span>
+                </div>
+                <div class="relative w-full max-w-lg mx-auto bg-white/20 rounded-full h-2 overflow-hidden">
+                    <div id="timerBar" class="bg-red-500 h-full rounded-full transition-all duration-1000" style="width: 100%">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Question -->
+            <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-white/20">
+                <h2 class="text-xl md:text-2xl font-semibold text-center leading-relaxed" id="questionText">
+                    ما هي عاصمة مصر؟
+                </h2>
+            </div>
+
+            <!-- Answers -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <button class="answer-btn bg-blue-900/80 hover:bg-blue-800/90 rounded-xl p-4 text-right font-semibold text-lg border-2 border-blue-600" onclick="selectAnswer(0)">
+                    <span class="text-yellow-400 font-bold ml-3">أ:</span>
+                    <span id="answer0">القاهرة</span>
+                </button>
+                <button class="answer-btn bg-blue-900/80 hover:bg-blue-800/90 rounded-xl p-4 text-right font-semibold text-lg border-2 border-blue-600" onclick="selectAnswer(1)">
+                    <span class="text-yellow-400 font-bold ml-3">ب:</span>
+                    <span id="answer1">الإسكندرية</span>
+                </button>
+                <button class="answer-btn bg-blue-900/80 hover:bg-blue-800/90 rounded-xl p-4 text-right font-semibold text-lg border-2 border-blue-600" onclick="selectAnswer(2)">
+                    <span class="text-yellow-400 font-bold ml-3">ج:</span>
+                    <span id="answer2">أسوان</span>
+                </button>
+                <button class="answer-btn bg-blue-900/80 hover:bg-blue-800/90 rounded-xl p-4 text-right font-semibold text-lg border-2 border-blue-600" onclick="selectAnswer(3)">
+                    <span class="text-yellow-400 font-bold ml-3">د:</span>
+                    <span id="answer3">الأقصر</span>
+                </button>
+            </div>
+
+            <!-- Names Section -->
+            <div class="flex justify-center gap-8 mb-8 text-lg md:text-xl font-bold gold-gradient bg-clip-text text-transparent">
+                <p><strong>إشراف:</strong> محمد مجدي</p>
+                <p><strong>إدارة</strong> أ/نيفين عطاالله</p>
+                <p><strong>إعداد:</strong> زياد العسلي</p>
+            </div>
+
+            <!-- Next Question Button -->
+            <div class="text-center mb-8">
+                <button id="nextBtn" class="gold-gradient text-blue-900 font-bold py-3 px-8 rounded-full hover:scale-105 transition-transform duration-300 hidden" onclick="nextQuestion()">
+                    السؤال التالي
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="max-w-2xl mx-auto text-center hidden">
+            <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+                <h2 class="text-3xl font-bold mb-4" id="gameOverTitle">انتهت اللعبة!</h2>
+                <p class="text-xl mb-6" id="finalScore">النتيجة النهائية: 0 / 100</p>
+                <button onclick="restartGame()" class="gold-gradient text-blue-900 font-bold py-3 px-8 rounded-full hover:scale-105 transition-transform duration-300">
+                    العب مرة أخرى
+                </button>
+            </div>
+        </div>
+
+        <!-- Help Modal -->
+        <div id="helpModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+            <div class="bg-white text-gray-800 rounded-2xl p-6 max-w-md mx-4">
+                <h3 class="text-xl font-bold mb-4 text-center" id="helpTitle">مساعدة</h3>
+                <p class="text-center mb-6" id="helpContent">محتوى المساعدة</p>
+                <button onclick="closeHelp()" class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const questions = [
+            {
+                question: "ما هي عاصمة مصر؟",
+                answers: ["القاهرة", "الإسكندرية", "أسوان", "الأقصر"],
+                correct: 0
+            },
+            {
+                question: "كم عدد أيام السنة الميلادية؟",
+                answers: ["364", "365", "366", "367"],
+                correct: 1
+            },
+            {
+                question: "ما هو أطول نهر في العالم؟",
+                answers: ["النيل", "الأمازون", "المسيسيبي", "اليانغتسي"],
+                correct: 0
+            },
+            {
+                question: "من هو مؤلف رواية 'مئة عام من العزلة'؟",
+                answers: ["غابرييل غارسيا ماركيز", "إرنست همنغواي", "فرانز كافكا", "جورج أورويل"],
+                correct: 0
+            },
+            {
+                question: "ما هي أصغر قارة في العالم؟",
+                answers: ["آسيا", "أوروبا", "أستراليا", "أنتاركتيكا"],
+                correct: 2
+            },
+            {
+                question: "في أي عام تم اختراع الإنترنت؟",
+                answers: ["1969", "1975", "1983", "1991"],
+                correct: 0
+            },
+            {
+                question: "ما هو العنصر الكيميائي الذي رمزه Au؟",
+                answers: ["الفضة", "الذهب", "الألومنيوم", "الأرجون"],
+                correct: 1
+            },
+            {
+                question: "كم عدد عظام جسم الإنسان البالغ؟",
+                answers: ["206", "208", "210", "212"],
+                correct: 0
+            },
+            {
+                question: "ما هي أعمق نقطة في المحيطات؟",
+                answers: ["خندق ماريانا", "خندق بورتوريكو", "خندق اليابان", "خندق بيرو-تشيلي"],
+                correct: 0
+            },
+            {
+                question: "من هو العالم الذي وضع نظرية النسبية؟",
+                answers: ["نيوتن", "أينشتاين", "غاليليو", "كوبرنيكوس"],
+                correct: 1
+            },
+            {
+                question: "ما هي أكبر صحراء في العالم؟",
+                answers: ["الصحراء الكبرى", "صحراء غوبي", "صحراء أنتاركتيكا", "صحراء كالاهاري"],
+                correct: 2
+            },
+            {
+                question: "في أي عام سقط جدار برلين؟",
+                answers: ["1987", "1988", "1989", "1990"],
+                correct: 2
+            },
+            {
+                question: "ما هو أسرع حيوان في العالم؟",
+                answers: ["الفهد", "الصقر الشاهين", "الغزال", "الحصان"],
+                correct: 1
+            },
+            {
+                question: "كم عدد الكروموسومات في الخلية البشرية؟",
+                answers: ["44", "46", "48", "50"],
+                correct: 1
+            },
+            {
+                question: "ما هي أكبر كوكب في المجموعة الشمسية؟",
+                answers: ["زحل", "المشتري", "نبتون", "أورانوس"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة اليابان؟",
+                answers: ["طوكيو", "أوساكا", "كيوتو", "هيروشيما"],
+                correct: 0
+            },
+            {
+                question: "من هو أول إنسان سار على القمر؟",
+                answers: ["نيل أرمسترونغ", "بز ألدرين", "يوري غاغارين", "جون غلين"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم أكبر محيط في العالم؟",
+                answers: ["المحيط الهادئ", "المحيط الأطلسي", "المحيط الهندي", "المحيط المتجمد الشمالي"],
+                correct: 0
+            },
+            {
+                question: "من كتب مسرحية 'هاملت'؟",
+                answers: ["ويليام شكسبير", "كريستوفر مارلو", "تنيسي ويليامز", "آرثر ميلر"],
+                correct: 0
+            },
+            {
+                question: "ما هو العنصر الذي يشكل حوالي 78% من الغلاف الجوي؟",
+                answers: ["الأكسجين", "النيتروجين", "ثاني أكسيد الكربون", "الأرجون"],
+                correct: 1
+            },
+            {
+                question: "في أي عام بدأت الحرب العالمية الثانية؟",
+                answers: ["1935", "1937", "1939", "1941"],
+                correct: 2
+            },
+            {
+                question: "ما هي عاصمة البرازيل؟",
+                answers: ["ريو دي جانيرو", "برازيليا", "ساو باولو", "سلفادور"],
+                correct: 1
+            },
+            {
+                question: "من هو مخترع المصباح الكهربائي؟",
+                answers: ["توماس إديسون", "نيكولا تسلا", "ألكسندر غراهام بيل", "جورج وستنجهاوس"],
+                correct: 0
+            },
+            {
+                question: "ما هو أعلى جبل في العالم؟",
+                answers: ["جبل إفرست", "جبل K2", "جبل كانشنجونغا", "جبل لوتسه"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم الكتاب المقدس في الإسلام؟",
+                answers: ["التوراة", "الإنجيل", "القرآن", "الزبور"],
+                correct: 2
+            },
+            {
+                question: "كم عدد الكواكب في المجموعة الشمسية؟",
+                answers: ["7", "8", "9", "10"],
+                correct: 1
+            },
+            {
+                question: "من هو أول رئيس للولايات المتحدة؟",
+                answers: ["جورج واشنطن", "توماس جيفرسون", "أبراهام لنكولن", "جون آدامز"],
+                correct: 0
+            },
+            {
+                question: "ما هي اللغة الرسمية للأرجنتين؟",
+                answers: ["الإسبانية", "البرتغالية", "الإنجليزية", "الفرنسية"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم أكبر دولة في العالم من حيث المساحة؟",
+                answers: ["الصين", "روسيا", "كندا", "الولايات المتحدة"],
+                correct: 1
+            },
+            {
+                question: "من هو العالم الذي اكتشف الجاذبية؟",
+                answers: ["إسحاق نيوتن", "ألبرت أينشتاين", "غاليليو غاليلي", "يوهانس كيبلر"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة فرنسا؟",
+                answers: ["باريس", "مارسيليا", "ليون", "تولوز"],
+                correct: 0
+            },
+            {
+                question: "ما هو أكبر حيوان بري في العالم؟",
+                answers: ["الفيل", "وحيد القرن", "الزرافة", "أسد البحر"],
+                correct: 1
+            },
+            {
+                question: "في أي عام اكتشف كريستوفر كولومبوس أمريكا؟",
+                answers: ["1492", "1488", "1500", "1512"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم الهرم الأكبر في مصر؟",
+                answers: ["هرم خفرع", "هرم منقرع", "هرم خوفو", "هرم زوسر"],
+                correct: 2
+            },
+            {
+                question: "من هو مؤسس شركة مايكروسوفت؟",
+                answers: ["ستيف جوبز", "بيل غيتس", "إيلون ماسك", "مارك زوكربيرغ"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة أستراليا؟",
+                answers: ["سيدني", "ملبورن", "كانبيرا", "بريزبين"],
+                correct: 2
+            },
+            {
+                question: "ما هو العنصر الكيميائي الذي رمزه O؟",
+                answers: ["الأكسجين", "الأوزميوم", "الأوروبيوم", "الأورثوكليز"],
+                correct: 0
+            },
+            {
+                question: "من هو الفنان الذي رسم لوحة الموناليزا؟",
+                answers: ["ليوناردو دا فينشي", "مايكل أنجلو", "رافاييل", "فينسنت فان جوخ"],
+                correct: 0
+            },
+            {
+                question: "ما هي أطول سلسلة جبلية في العالم؟",
+                answers: ["جبال الأنديز", "جبال الهملايا", "جبال الروكي", "جبال الألب"],
+                correct: 0
+            },
+            {
+                question: "في أي عام انتهت الحرب العالمية الأولى؟",
+                answers: ["1914", "1916", "1918", "1920"],
+                correct: 2
+            },
+            {
+                question: "ما هي عاصمة الهند؟",
+                answers: ["مومباي", "نيودلهي", "كولكاتا", "تشيناي"],
+                correct: 1
+            },
+            {
+                question: "من هو مؤسس شركة أمازون؟",
+                answers: ["جيف بيزوس", "إيلون ماسك", "بيل غيتس", "وارن بافيت"],
+                correct: 0
+            },
+            {
+                question: "ما هو أسرع طائر في العالم؟",
+                answers: ["النسر", "الصقر الشاهين", "الببغاء", "البومة"],
+                correct: 1
+            },
+            {
+                question: "ما هي المدينة التي تُعرف بـ'مدينة النور'؟",
+                answers: ["باريس", "نيويورك", "لندن", "طوكيو"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم القارة التي تقع فيها أستراليا؟",
+                answers: ["أفريقيا", "آسيا", "أوقيانوسيا", "أمريكا الجنوبية"],
+                correct: 2
+            },
+            {
+                question: "من هو العالم الذي اكتشف البنسلين؟",
+                answers: ["ألكسندر فليمنغ", "لويس باستور", "روبرت كوخ", "جوناس سالك"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة كندا؟",
+                answers: ["تورونتو", "فانكوفر", "أوتاوا", "مونتريال"],
+                correct: 2
+            },
+            {
+                question: "ما هو اسم أكبر بحيرة في العالم؟",
+                answers: ["بحيرة بايكال", "بحيرة سوبريور", "بحيرة فيكتوريا", "بحيرة ميشيغان"],
+                correct: 1
+            },
+            {
+                question: "من كتب رواية '1984'؟",
+                answers: ["جورج أورويل", "ألدوس هكسلي", "راي برادبري", "فيليب ك. ديك"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة إيطاليا؟",
+                answers: ["ميلانو", "روما", "البندقية", "فلورنسا"],
+                correct: 1
+            },
+            {
+                question: "ما هو الحيوان الذي يُعرف بـ'ملك الغابة'؟",
+                answers: ["النمر", "الأسد", "الدب", "الفيل"],
+                correct: 1
+            },
+            {
+                question: "في أي عام أُسست الأمم المتحدة؟",
+                answers: ["1942", "1945", "1948", "1950"],
+                correct: 1
+            },
+            {
+                question: "ما هي اللغة الرسمية للبرازيل؟",
+                answers: ["الإسبانية", "البرتغالية", "الإنجليزية", "الفرنسية"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر دولة في إفريقيا من حيث المساحة؟",
+                answers: ["نيجيريا", "الجزائر", "جنوب إفريقيا", "إثيوبيا"],
+                correct: 1
+            },
+            {
+                question: "من هو العالم الذي وضع قوانين الحركة الثلاثة؟",
+                answers: ["إسحاق نيوتن", "ألبرت أينشتاين", "نيكولا تسلا", "جاليليو"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة روسيا؟",
+                answers: ["موسكو", "سانت بطرسبرغ", "نوفوسيبيرسك", "يكاترينبورغ"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم أكبر جزيرة في العالم؟",
+                answers: ["مدغشقر", "غرينلاند", "بورنيو", "أستراليا"],
+                correct: 1
+            },
+            {
+                question: "من كتب 'الأمير'؟",
+                answers: ["نيكولو مكيافيلي", "توماس هوبز", "جون لوك", "جان جاك روسو"],
+                correct: 0
+            },
+            {
+                question: "ما هو العنصر الكيميائي الذي رمزه Fe؟",
+                answers: ["الحديد", "النحاس", "الفضة", "الذهب"],
+                correct: 0
+            },
+            {
+                question: "في أي عام بدأت ثورة أكتوبر الروسية؟",
+                answers: ["1914", "1917", "1920", "1923"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة المملكة العربية السعودية؟",
+                answers: ["جدة", "الرياض", "مكة", "الدمام"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أول إنسان في الفضاء؟",
+                answers: ["نيل أرمسترونغ", "يوري غاغارين", "بز ألدرين", "جون غلين"],
+                correct: 1
+            },
+            {
+                question: "ما هي أكبر مدينة في العالم من حيث عدد السكان؟",
+                answers: ["طوكيو", "نيويورك", "شانغهاي", "مومباي"],
+                correct: 0
+            },
+            {
+                question: "من هو مؤسس شركة أبل؟",
+                answers: ["بيل غيتس", "ستيف جوبز", "جيف بيزوس", "مارك زوكربيرغ"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة الصين؟",
+                answers: ["شنغهاي", "بكين", "هونغ كونغ", "غوانزو"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر بركان نشط في العالم؟",
+                answers: ["جبل فيزوف", "جبل إتنا", "ماونا لوا", "جبل كيليمانجارو"],
+                correct: 2
+            },
+            {
+                question: "من كتب رواية 'الخيميائي'؟",
+                answers: ["باولو كويلو", "غابرييل غارسيا ماركيز", "إرنست همنغواي", "خورخي لويس بورخيس"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة جنوب إفريقيا؟",
+                answers: ["جوهانسبرغ", "كيب تاون", "بريتوريا", "ديربان"],
+                correct: 2
+            },
+            {
+                question: "ما هو اسم أكبر خليج في العالم؟",
+                answers: ["خليج المكسيك", "خليج البنغال", "خليج غينيا", "خليج هدسون"],
+                correct: 1
+            },
+            {
+                question: "في أي عام بدأت الثورة الفرنسية؟",
+                answers: ["1776", "1789", "1804", "1815"],
+                correct: 1
+            },
+            {
+                question: "ما هو الحيوان الذي يُعرف بـ'سفينة الصحراء'؟",
+                answers: ["الجمل", "الحصان", "النعامة", "الظبي"],
+                correct: 0
+            },
+            {
+                question: "من هو العالم الذي اكتشف نظرية التطور؟",
+                answers: ["تشارلز داروين", "غريغور مندل", "لويس باستور", "ألفريد والاس"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة المكسيك؟",
+                answers: ["مكسيكو سيتي", "غوادالاخارا", "مونتيري", "تيخوانا"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم أكبر شلال في العالم؟",
+                answers: ["شلال نياجرا", "شلال فيكتوريا", "شلال إجوازو", "شلال أنجل"],
+                correct: 3
+            },
+            {
+                question: "من كتب 'الأوديسة'؟",
+                answers: ["هوميروس", "فيرجيل", "سوفوكليس", "أريستوفانيس"],
+                correct: 0
+            },
+            {
+                question: "ما هو العنصر الكيميائي الذي رمزه H؟",
+                answers: ["الهيدروجين", "الهيليوم", "الحمر", "الهافنيوم"],
+                correct: 0
+            },
+            {
+                question: "في أي عام بدأت الحرب الأهلية الأمريكية؟",
+                answers: ["1850", "1861", "1870", "1880"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة إسبانيا؟",
+                answers: ["برشلونة", "مدريد", "إشبيلية", "فالنسيا"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر صحراء في آسيا؟",
+                answers: ["صحراء الربع الخالي", "صحراء غوبي", "صحراء ثار", "صحراء كاراكوم"],
+                correct: 1
+            },
+            {
+                question: "من هو مؤسس شركة تسلا؟",
+                answers: ["جيف بيزوس", "إيلون ماسك", "بيل غيتس", "ستيف جوبز"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة نيجيريا؟",
+                answers: ["لاغوس", "أبوجا", "كانو", "إيبادان"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر بحر في العالم؟",
+                answers: ["البحر الأبيض المتوسط", "بحر الكاريبي", "بحر الصين الجنوبي", "بحر الفلبين"],
+                correct: 3
+            },
+            {
+                question: "من كتب 'دون كيخوته'؟",
+                answers: ["ميغيل دي ثيربانتس", "فيديريكو غارسيا لوركا", "خورخي لويس بورخيس", "غابرييل غارسيا ماركيز"],
+                correct: 0
+            },
+            {
+                question: "ما هو العنصر الكيميائي الذي رمزه C؟",
+                answers: ["الكربون", "الكالسيوم", "الكلور", "الكروم"],
+                correct: 0
+            },
+            {
+                question: "في أي عام تم إطلاق أول قمر صناعي 'سبوتنيك'؟",
+                answers: ["1955", "1957", "1960", "1962"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة كوريا الجنوبية؟",
+                answers: ["سيول", "بوسان", "إنشيون", "دايغو"],
+                correct: 0
+            },
+            {
+                question: "ما هو اسم أكبر قمر في المجموعة الشمسية؟",
+                answers: ["تيتان", "غانيميد", "كاليستو", "إيو"],
+                correct: 1
+            },
+            {
+                question: "من كتب 'فرانكشتاين'؟",
+                answers: ["ماري شيلي", "برام ستوكر", "إدغار آلان بو", "ناثانيال هوثورن"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة تركيا؟",
+                answers: ["إسطنبول", "أنقرة", "إزمير", "بورصة"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر نهر في أمريكا الجنوبية؟",
+                answers: ["نهر الأمازون", "نهر بارانا", "نهر أورينوكو", "نهر ساو فرانسيسكو"],
+                correct: 0
+            },
+            {
+                question: "في أي عام تم بناء أول حاسوب إلكتروني 'إنياك'؟",
+                answers: ["1940", "1946", "1950", "1955"],
+                correct: 1
+            },
+            {
+                question: "ما هي عاصمة ألمانيا؟",
+                answers: ["ميونيخ", "برلين", "هامبورغ", "فرانكفورت"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر طائر في العالم؟",
+                answers: ["النعامة", "الكوندور", "النسر", "البجعة"],
+                correct: 0
+            },
+            {
+                question: "من كتب 'كبرياء وتحامل'؟",
+                answers: ["جين أوستن", "شارلوت برونتي", "إميلي برونتي", "ماري شيلي"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة المغرب؟",
+                answers: ["الدار البيضاء", "الرباط", "مراكش", "فاس"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر صحراء في أستراليا؟",
+                answers: ["صحراء سيمبسون", "صحراء فيكتوريا الكبرى", "صحراء جيبسون", "صحراء تانامي"],
+                correct: 1
+            },
+            {
+                question: "من هو العالم الذي اكتشف الدورة الدموية؟",
+                answers: ["ويليام هارفي", "روبرت بويل", "جاليليو", "أنطون فان ليوينهوك"],
+                correct: 0
+            },
+            {
+                question: "ما هي عاصمة الإمارات العربية المتحدة؟",
+                answers: ["دبي", "أبوظبي", "الشارقة", "عجمان"],
+                correct: 1
+            },
+            {
+                question: "ما هو اسم أكبر بحيرة في إفريقيا؟",
+                answers: ["بحيرة تنجانيقا", "بحيرة فيكتوريا", "بحيرة مالاوي", "بحيرة تشاد"],
+                correct: 1
+            },
+            {
+                question: "من كتب 'الإلياذة'؟",
+                answers: ["هوميروس", "فيرجيل", "سوفوكليس", "أريستوفانيس"],
+                correct: 0
+            }
+        ];
+
+        let currentQuestion = 0;
+        let correctAnswers = 0;
+        let timeLeft = 30;
+        let timerInterval;
+
+        function initGame() {
+            displayQuestion();
+            updateScore();
+            startTimer();
+        }
+
+        function startTimer() {
+            timeLeft = 30;
+            updateTimerDisplay();
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timeUp();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            document.getElementById('timer').textContent = timeLeft;
+            const percentage = (timeLeft / 30) * 100;
+            document.getElementById('timerBar').style.width = percentage + '%';
+            
+            const timerBar = document.getElementById('timerBar');
+            let newClass;
+            if (timeLeft <= 5) {
+                newClass = 'bg-red-600 h-full rounded-full transition-all duration-1000 pulse-animation';
+            } else if (timeLeft <= 15) {
+                newClass = 'bg-orange-500 h-full rounded-full transition-all duration-1000';
+            } else {
+                newClass = 'bg-red-500 h-full rounded-full transition-all duration-1000';
+            }
+            if (timerBar.className !== newClass) {
+                timerBar.className = newClass;
+            }
+        }
+
+        function timeUp() {
+            const buttons = document.querySelectorAll('.answer-btn');
+            buttons.forEach(btn => btn.disabled = true);
+            
+            const correct = questions[currentQuestion].correct;
+            buttons[correct].className = 'answer-btn correct-answer rounded-xl p-4 text-right font-semibold text-lg border-2';
+            
+            showGlow('wrong');
+            
+            document.getElementById('nextBtn').classList.remove('hidden');
+        }
+
+        function displayQuestion() {
+            const q = questions[currentQuestion];
+            document.getElementById('questionText').textContent = q.question;
+            
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`answer${i}`).textContent = q.answers[i];
+            }
+            
+            const buttons = document.querySelectorAll('.answer-btn');
+            buttons.forEach(btn => {
+                btn.className = 'answer-btn bg-blue-900/80 hover:bg-blue-800/90 rounded-xl p-4 text-right font-semibold text-lg border-2 border-blue-600';
+                btn.disabled = false;
+            });
+        }
+
+        function selectAnswer(selectedIndex) {
+            clearInterval(timerInterval);
+            
+            const correct = questions[currentQuestion].correct;
+            const buttons = document.querySelectorAll('.answer-btn');
+            
+            buttons.forEach(btn => btn.disabled = true);
+            
+            if (selectedIndex === correct) {
+                buttons[selectedIndex].className = 'answer-btn correct-answer rounded-xl p-4 text-right font-semibold text-lg border-2';
+                correctAnswers++;
+                showGlow('correct');
+            } else {
+                buttons[selectedIndex].className = 'answer-btn wrong-answer rounded-xl p-4 text-right font-semibold text-lg border-2';
+                buttons[correct].className = 'answer-btn correct-answer rounded-xl p-4 text-right font-semibold text-lg border-2';
+                showGlow('wrong');
+            }
+            
+            document.getElementById('nextBtn').classList.remove('hidden');
+        }
+        
+        function showGlow(type) {
+            const glowDiv = document.createElement('div');
+            glowDiv.className = type === 'correct' ? 'correct-glow' : 'wrong-glow';
+            document.body.appendChild(glowDiv);
+            
+            setTimeout(() => {
+                if (glowDiv.parentNode) {
+                    glowDiv.parentNode.removeChild(glowDiv);
+                }
+            }, 2000);
+        }
+
+        function nextQuestion() {
+            if (currentQuestion === questions.length - 1) {
+                endGame();
+            } else {
+                currentQuestion++;
+                displayQuestion();
+                updateScore();
+                startTimer();
+                document.getElementById('nextBtn').classList.add('hidden');
+            }
+        }
+
+        function showHelp(title, content) {
+            document.getElementById('helpTitle').textContent = title;
+            document.getElementById('helpContent').textContent = content;
+            document.getElementById('helpModal').classList.remove('hidden');
+            document.getElementById('helpModal').classList.add('flex');
+        }
+
+        function closeHelp() {
+            document.getElementById('helpModal').classList.add('hidden');
+            document.getElementById('helpModal').classList.remove('flex');
+        }
+
+        function updateScore() {
+            // Score display removed from this version
+        }
+
+        function endGame() {
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            
+            const percentage = Math.round((correctAnswers / questions.length) * 100);
+            
+            if (percentage >= 80) {
+                document.getElementById('gameOverTitle').textContent = 'ممتاز! أنت من العباقرة!';
+            } else if (percentage >= 60) {
+                document.getElementById('gameOverTitle').textContent = 'جيد جداً! أداء رائع!';
+            } else if (percentage >= 40) {
+                document.getElementById('gameOverTitle').textContent = 'جيد! يمكنك التحسن أكثر!';
+            } else {
+                document.getElementById('gameOverTitle').textContent = 'حاول مرة أخرى!';
+            }
+            
+            document.getElementById('finalScore').textContent = `النتيجة النهائية: ${correctAnswers} / ${questions.length} (${percentage}%)`;
+        }
+
+        function restartGame() {
+            currentQuestion = 0;
+            correctAnswers = 0;
+            timeLeft = 30;
+            clearInterval(timerInterval);
+            
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            
+            initGame();
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
